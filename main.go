@@ -9,21 +9,18 @@ import (
 	"os"
 )
 
-func findCommonColors(img image.Image, threshold float64) {
-	// Get dimensions of the input image
-	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
+const threshold = 60
 
-	// Create a new RGBA image with the same dimensions
-	r := image.NewRGBA(image.Rect(0, 0, width, height))
+func main() {
+	imgFile, err := os.Open("test_cases/monkey.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer imgFile.Close()
 
-	// Copy pixels manually
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			c := img.At(x, y)
-			r.Set(x, y, c)
-		}
+	img, _, err := image.Decode(imgFile)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Define color comparison function
@@ -35,58 +32,33 @@ func findCommonColors(img image.Image, threshold float64) {
 			math.Abs(float64(b1-b2)) < threshold
 	}
 
-	// Process rows
-	for y := 0; y < r.Bounds().Dy(); y++ {
-		for x := 0; x < r.Bounds().Dx(); x++ {
-			p := r.At(x, y)
+	// Process rows directly on the original image
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			p := img.At(x, y)
 
 			// Check horizontal neighbors
-			if x > 0 && compareColor(p, r.At(x-1, y)) {
+			if x > 0 && compareColor(p, img.At(x-1, y)) {
 				continue // Skip if color matches left neighbor
 			}
 
 			// Check vertical neighbors
-			if y > 0 && compareColor(p, r.At(x, y-1)) {
+			if y > 0 && compareColor(p, img.At(x, y-1)) {
 				continue // Skip if color matches above neighbor
 			}
 
-			// If no matching neighbors, keep current color
-			continue
+			// If no matching neighbors, keep current color (no modification needed)
 		}
 	}
 
-	// Recreate image with processed colors
-	newImg := image.NewRGBA(r.Bounds())
-
-	// Copy pixels from r to newImg
-	for y := 0; y < r.Bounds().Dy(); y++ {
-		for x := 0; x < r.Bounds().Dx(); x++ {
-			newImg.Set(x, y, r.At(x, y))
-		}
-	}
-}
-func main() {
-	imgFile, err := os.Open("test_cases/nursery-cover.png")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer imgFile.Close()
-
-	img, _, err := image.Decode(imgFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	findCommonColors(img, 90) // Adjust threshold as needed
-
-	// Save processed image
-	outFile, err := os.Create("test_cases/nursery-cover-processed.png")
+	// Save processed image directly
+	outFile, err := os.Create("test_cases/monkey-processed.png")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer outFile.Close()
 
-	err = png.Encode(outFile, img)
+	err = png.Encode(outFile, img) // Use original image for saving
 	if err != nil {
 		log.Fatal(err)
 	}
