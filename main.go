@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
 	"log"
 	"math"
 	"os"
+	"os/exec"
+	"path/filepath"
 )
 
-const threshold = 60
+const threshold = 30
 
 func main() {
 	imgFile, err := os.Open("test_cases/stat.png")
@@ -26,7 +30,11 @@ func main() {
 	// processing the image
 	// use less colors
 	img = useLessColors(img)
-	// TODO: convert to SVG
+	// convert to SVG
+	err = toSVG(img, "test_cases/stat.svg")
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Save processed image directly
 	outFile, err := os.Create("test_cases/stat-processed.png")
@@ -90,4 +98,63 @@ func useLessColors(img image.Image) image.Image {
 	}
 
 	return newImg
+}
+
+func toSVG(img image.Image, svgFilename string) error {
+	tempDir := os.TempDir()
+	tempPNG, err := os.CreateTemp(tempDir, "temp*.png")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer os.Remove(tempPNG.Name())
+	err = png.Encode(tempPNG, img)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tempPNG.Close()
+
+	tempPNM := filepath.Join(tempDir, "temp.pnm")
+	defer os.Remove(tempPNM)
+
+	// 3. Encode and write PNM data
+	pnmFile, err := os.Create(tempPNM)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pnmFile.Close()
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	fmt.Fprintf(pnmFile, "P3\n") // P3 for ASCII color
+	fmt.Fprintf(pnmFile, "%d %d\n", width, height)
+	fmt.Fprintf(pnmFile, "255\n") // Max color value
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			c := img.At(x, y)
+			r, g, b, _ := c.RGBA()
+			fmt.Fprintf(pnmFile, "%d %d %d ", r>>8, g>>8, b>>8) // Scale to 0-255
+		}
+		fmt.Fprintf(pnmFile, "\n")
+	}
+
+	// apt install potrace
+	cmd := exec.Command("potrace", "-s", "-o", svgFilename, tempPNM) // -s for SVG output
+
+	var outb, errb bytes.Buffer
+	cmd.Stdout = &outb
+	cmd.Stderr = &errb
+
+	err = cmd.Run()
+	if err != nil {
+		fmt.Println("potrace error:", err)
+		fmt.Println("stderr:", errb.String()) // Print stderr
+		return err
+	}
+
+	fmt.Println("potrace stdout:", outb.String()) // Print stdout
+	fmt.Println("PNG converted to SVG successfully!")
+	return nil
 }
